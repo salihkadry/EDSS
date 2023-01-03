@@ -1,27 +1,19 @@
 const APP_ID = "0dad2ddcc43146dca3260bfaaca6e7d0"
 let joinedStream =false;
-let uid = sessionStorage.getItem('uid')
-if(!uid){
-    uid = Math.floor(Math.random() * 10000)
-    sessionStorage.setItem('uid', uid)
-}
+let uid = (Math.floor(Math.random() * 10000)).toString()
+sessionStorage.setItem('uid', uid)
+AgoraRTC.setLogLevel(3)
 
-let token = null;
+
 let client;
-
 let rtmClient;
 let channel;
-
 const queryString = window.location.search
 const urlParams = new URLSearchParams(queryString)
 let roomId = urlParams.get('room')
-if(!roomId){
-    roomId = 1
-}
-
-let displayName = sessionStorage.getItem('display_name')
-if(!displayName){
-    window.location = 'lobby.html'
+let displayName = urlParams.get('name')
+if(!displayName || !roomId){
+    window.location = '/'
 }
 
 let localTracks = []
@@ -30,30 +22,35 @@ let remoteUsers = {}
 let localScreenTracks;
 let sharingScreen = false;
 
-let joinRoomInit = async () => {
-    rtmClient = await AgoraRTM.createInstance(APP_ID)
-    await rtmClient.login({uid,token})
-    await rtmClient.addOrUpdateLocalUserAttributes({'name':displayName})
 
+let RTMtoken = null
+let RTCtoken = null
+
+
+let joinRoomInit = async () => {
+    //chat room
+
+    rtmClient = await AgoraRTM.createInstance(APP_ID , {'logFilter' :AgoraRTM.LOG_FILTER_ERROR })
+    
+    await rtmClient.login({uid,RTMtoken})
+    await rtmClient.addOrUpdateLocalUserAttributes({'name':displayName})
     channel = await rtmClient.createChannel(roomId)
     await channel.join()
     channel.on('MemberJoined', handleMemberJoined)
     channel.on('MemberLeft', handleMemberLeft)
     channel.on('ChannelMessage', handleChannelMessage)
-
     getMembers()
     addBotMessageToDom(`Welcome to the room ${displayName}! 👋`)
-
-    client = AgoraRTC.createClient({mode:'rtc', codec:'vp8'})
-    await client.join(APP_ID, roomId, token, uid)
-
-    client.on('user-published', handleUserPublished)
-    client.on('user-left', handleUserLeft)
+    //video audio room 
+    client = await AgoraRTC.createClient({mode:'rtc', codec:'vp8'})
+    
+    await client.join(APP_ID, roomId, RTCtoken, uid)
+    document.getElementById('join-btn').addEventListener('click', joinStream)
 }
 
 let joinStream = async () => {
     document.getElementById('join-btn').style.display = 'none'
-    document.getElementsByClassName('stream__actions')[0].style.display = 'flex'
+    
 
     // localTracks = await AgoraRTC.createMicrophoneAndCameraTracks({}, {encoderConfig:{
     //     width:{min:640, ideal:1920, max:1920},
@@ -69,121 +66,50 @@ let joinStream = async () => {
     document.getElementById('streams__container').insertAdjacentHTML('beforeend', player)
     document.getElementById(`user-container-${uid}`).addEventListener('click', expandVideoFrame)
     localTracks[1].play(`user-${uid}`)
-    await client.publish([/*localTracks[0],*/ localTracks[1]])
-    joinedStream = true;
+    await client.publish([localTracks[0],localTracks[1]])
+    document.getElementsByClassName('stream__actions')[0].style.display = 'flex'
 }
 
 userDetectionInterval = {}
-setInterval(()=>{
-    let videoContainerPlayerDivs = document.getElementsByClassName('video__container')
-    for(let i = 0; videoContainerPlayerDivs.length > i; i++){
-        videoDev = videoContainerPlayerDivs[i].children[0].children[0]
-        let id = parseInt(videoContainerPlayerDivs[i].children[0].id.slice(5))
+IntervalId = setInterval(async ()=>{
 
-        if(videoDev)
-            video =videoDev.children
-        if(video[0] && video.length < 2){
-            const canvas = faceapi.createCanvasFromMedia(video[0])
-            let displaySize = { width: videoContainerPlayerDivs[i].clientWidth, height: videoContainerPlayerDivs[i].clientHeight }
-            faceapi.matchDimensions(canvas, displaySize)
-            videoDev.append(canvas)
-            console.log('one more detection :D') 
-            let g = true  
-            let detections = undefined
-            const intervalId = setInterval(async () => {
-
-            detections = await faceapi.detectSingleFace(video[0], new faceapi.TinyFaceDetectorOptions())/*.withFaceLandmarks()*/.withFaceExpressions()
+    videoContainerPlayerDiv = document.getElementById(`user-${uid}`)
+    if (videoContainerPlayerDiv){
+    agoraVideoDiv = videoContainerPlayerDiv.children
+        if(agoraVideoDiv.length > 0){
+            videoAgora =agoraVideoDiv[0].children
+        if(videoAgora.length > 0){
+            video = videoAgora[0]
+            detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions()
             if (detections){
-                console.log(detections)
-                g = false
-                let displaySize = { width: videoContainerPlayerDivs[i].clientWidth, height: videoContainerPlayerDivs[i].clientHeight }
-                faceapi.matchDimensions(canvas, displaySize)
+                emotions = 
+                        {'angry':detections.expressions.angry,
+                        'disgusted':detections.expressions.disgusted,
+                        'fearful':detections.expressions.fearful,
+                        'neutral':detections.expressions.neutral,
+                        'sad':detections.expressions.sad,
+                        'surprised':detections.expressions.surprised,
+                        'happy':detections.expressions.happy}
+                        maxEmotionKey = Object.keys(emotions).reduce(function(a, b){ return emotions[a] > emotions[b] ? a : b });
+
+                let displaySize = { width: 300, height: 300 } 
                 const resizedDetections = await faceapi.resizeResults(detections, displaySize)
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-                faceapi.draw.drawDetections(canvas, resizedDetections)
-                // faceapi.draw.drawFaceLandmarks(canvas, resizedDetections)
-                faceapi.draw.drawFaceExpressions(canvas, resizedDetections)
-            }
-            else{
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-            }
-            }, 5000)
-            userDetectionInterval[id] = intervalId    
+                var message = [maxEmotionKey , ((emotions[maxEmotionKey]*100) | 0) , resizedDetections.detection._box]
+                sendEmotionMessage(JSON.stringify(message) , rtmClient , roomId)
+                
+            } 
         }
     }
-
-},5000)
-let switchToCamera = async () => {
-    let player = `<div class="video__container" id="user-container-${uid}">
-                    <div class="video-player" id="user-${uid}"></div>
-                 </div>`
-    displayFrame.insertAdjacentHTML('beforeend', player)
-
-    await localTracks[0].setMuted(true)
-    await localTracks[1].setMuted(true)
-
-    document.getElementById('mic-btn').classList.remove('active')
-    document.getElementById('screen-btn').classList.remove('active')
-
-    localTracks[1].play(`user-${uid}`)
-    await client.publish([localTracks[1]])
-}
-
-let handleUserPublished = async (user, mediaType) => {
-    remoteUsers[user.uid] = user
-
-    await client.subscribe(user, mediaType)
-
-    let player = document.getElementById(`user-container-${user.uid}`)
-    if(player === null){
-        player = `<div class="video__container" id="user-container-${user.uid}">
-                <div class="video-player" id="user-${user.uid}"></div>
-            </div>`
-
-        document.getElementById('streams__container').insertAdjacentHTML('beforeend', player)
-        document.getElementById(`user-container-${user.uid}`).addEventListener('click', expandVideoFrame)
-   
     }
 
-    if(displayFrame.style.display){
-        let videoFrame = document.getElementById(`user-container-${user.uid}`)
-        videoFrame.style.height = '100px'
-        videoFrame.style.width = '100px'
-    }
 
-    if(mediaType === 'video'){
-        user.videoTrack.play(`user-${user.uid}`)
-    }
+},100)
 
-    if(mediaType === 'audio'){
-        user.audioTrack.play()
-    }
 
-}
 
-let handleUserLeft = async (user) => {
-    
-    if (user.id in userDetectionInterval){
-        await clearInterval(userDetectionInterval[user.id])
-        delete userDetectionInterval[user.uid]
-    }
-    delete remoteUsers[user.uid]
-    let item = document.getElementById(`user-container-${user.uid}`)
-    if(item){
-        item.remove()
-    }
 
-    if(userIdInDisplayFrame === `user-container-${user.uid}`){
-        displayFrame.style.display = null
-        
-        let videoFrames = document.getElementsByClassName('video__container')
 
-        for(let i = 0; videoFrames.length > i; i++){
-            videoFrames[i].style.height = '300px'
-            videoFrames[i].style.width = '300px'
-        }
-    }
-}
+
 
 let toggleMic = async (e) => {
     let button = e.currentTarget
@@ -212,16 +138,23 @@ let toggleCamera = async (e) => {
 let toggleScreen = async (e) => {
     let screenButton = e.currentTarget
     let cameraButton = document.getElementById('camera-btn')
-
+    let leaveButton = document.getElementById('leave-btn')
     if(!sharingScreen){
-        sharingScreen = true
+        
 
+        
+        try {
+        localScreenTracks = await AgoraRTC.createScreenVideoTrack()
+        
+        }catch (e)
+        {
+            return;
+        }
+        sharingScreen = true
         screenButton.classList.add('active')
         cameraButton.classList.remove('active')
         cameraButton.style.display = 'none'
-
-        localScreenTracks = await AgoraRTC.createScreenVideoTrack()
-
+        leaveButton.style.display = 'none'
         document.getElementById(`user-container-${uid}`).remove()
         displayFrame.style.display = 'block'
 
@@ -250,10 +183,23 @@ let toggleScreen = async (e) => {
     }else{
         sharingScreen = false 
         cameraButton.style.display = 'block'
+        leaveButton.style.display = 'block'
         document.getElementById(`user-container-${uid}`).remove()
         await client.unpublish([localScreenTracks])
 
-        switchToCamera()
+        let player = `<div class="video__container" id="user-container-${uid}">
+                    <div class="video-player" id="user-${uid}"></div>
+                 </div>`
+        displayFrame.insertAdjacentHTML('beforeend', player)
+        displayFrame.style.display = 'block'
+        await localTracks[0].setMuted(true)
+        await localTracks[1].setMuted(true)
+
+        document.getElementById('mic-btn').classList.remove('active')
+        document.getElementById('screen-btn').classList.remove('active')
+
+        localTracks[1].play(`user-${uid}`)
+        await client.publish([localTracks[1]])
     }
 }
 
@@ -273,7 +219,6 @@ let leaveStream = async (e) => {
     if(localScreenTracks){
         await client.unpublish([localScreenTracks])
     }
-
     document.getElementById(`user-container-${uid}`).remove()
 
     if(userIdInDisplayFrame === `user-container-${uid}`){
@@ -285,16 +230,41 @@ let leaveStream = async (e) => {
             videoFrames[i].style.width = '300px'
         }
     }
-
     channel.sendMessage({text:JSON.stringify({'type':'user_left', 'uid':uid})})
 }
 
 
 
-joinRoomInit().then(()=>{
-document.getElementById('camera-btn').addEventListener('click', toggleCamera)
-document.getElementById('mic-btn').addEventListener('click', toggleMic)
-document.getElementById('screen-btn').addEventListener('click', toggleScreen)
-document.getElementById('join-btn').addEventListener('click', joinStream)
-document.getElementById('leave-btn').addEventListener('click', leaveStream)
+
+getTokens = async ()=>
+{
+    res =await fetch(`http://localhost:8080/rte/${roomId}/publisher/uid/${uid}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+        },
+    })
+    JasonObj = await res.json()
+    RTCtoken = JasonObj['rtcToken'];
+    RTMtoken = JasonObj['rtmToken'];
+    
+}
+
+
+
+//{ 'rtcToken': rtcToken, 'rtmToken': rtmToken }
+getTokens().then(async ()=>
+{
+    await joinRoomInit()
+    document.getElementById('camera-btn').addEventListener('click', toggleCamera)
+    document.getElementById('mic-btn').addEventListener('click', toggleMic)
+    document.getElementById('screen-btn').addEventListener('click', toggleScreen)
+    document.getElementById('leave-btn').addEventListener('click', leaveStream)
+    client.on("token-privilege-will-expire" , async function ()
+    {
+        await getTokens()
+        await client.renewToken(RTCtoken);
+        await rtmClient.renewToken(RTMtoken);
+    }); 
 })
+
