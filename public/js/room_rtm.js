@@ -1,5 +1,4 @@
 let handleMemberJoined = async (MemberId) => {
-    console.log('A new member has joined the room:', MemberId)
     addMemberToDom(MemberId)
 
     let members = await channel.getMembers()
@@ -49,12 +48,56 @@ let getMembers = async () => {
     }
 }
 
-let handleChannelMessage = async (messageData, MemberId) => {
-    console.log('A new message was received')
-    let data = JSON.parse(messageData.text)
-    if(data.type === 'emotion'){
-        console.log(data)
+let handleEmtionMessage = async (message, peerId, messageProps) =>
+{
+    array = JSON.parse(message['text'])
+    box = array[2]
+    score = array [1]
+    emotion = array[0]
+    videoContainerPlayerDiv = document.getElementById(`user-${peerId}`)
+    if (videoContainerPlayerDiv){
+        agoraVideoDiv = videoContainerPlayerDiv.children
+        if(agoraVideoDiv.length > 0){
+            videoAgora =agoraVideoDiv[0].children
+            if(videoAgora.length > 0 ){
+                let canvas;
+                video = videoAgora[0]
+                if ( video.readyState === 4 ) {
+                if(videoAgora.length < 2)
+                {
+                    canvas = faceapi.createCanvasFromMedia(video)
+                    agoraVideoDiv[0].append(canvas)     
+                }
+                else
+                {
+                    canvas = videoAgora[1] 
+                }
+                let displaySize = {}
+                displaySize["width"] = videoContainerPlayerDiv.clientWidth
+                displaySize["height"] = videoContainerPlayerDiv.clientHeight
+                faceapi.matchDimensions(canvas, displaySize)
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+                
+                context = canvas.getContext("2d");
+                context.beginPath()
+                context.strokeStyle = "blue";
+                context.lineWidth = 2;
+                context.font = "20px Arial";
+                context.strokeText(emotion, 55, 55);
+                box['_x'] = box['_x'] * (displaySize["width"]/300)
+                box['_y'] = box['_y'] * (displaySize["height"]/300)
+                box['_width'] = box['_width'] * (displaySize["width"]/300)
+                box['_height'] = box['_height'] * (displaySize["height"]/300)
+                // console.log(displaySize)
+                // console.log(box)
+                context.strokeRect(box['_x'],box['_y'],box['_width'],box['_height']);
+            }
+        }
+        }
     }
+}
+let handleChannelMessage = async (messageData, MemberId) => {
+    let data = JSON.parse(messageData.text)
     if(data.type === 'chat'){
         addMessageToDom(data.displayName, data.message)
     }
@@ -82,10 +125,13 @@ let sendMessage = async (e) => {
     e.target.reset()
 }
 
-let sendEmotionMessage = async (e) => {
+
+
+let sendEmotionMessage = async (e , rtmClient) => {
     let message = e
-    channel.sendMessage({text:JSON.stringify({'type':'emotion', 'message':message, 'displayName':displayName, 'uid':uid})})
-    // addMessageToDom(displayName, message)
+    rtmClient.sendMessageToPeer({text:message},'547180838',)
+
+
 }
 
 let addMessageToDom = (name, message) => {
