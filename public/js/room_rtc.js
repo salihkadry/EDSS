@@ -15,13 +15,6 @@ let displayName = urlParams.get('name')
 if(!displayName || !roomId){
     window.location = '/'
 }
-if(displayName === 'osama' | displayName === 'salih' | displayName === 'ali')
-{
-    uid = '547180838'
-}
-if(uid === '547180838'){
-    document.getElementById('join-btn').style.display = 'none'
-}
 let localTracks = []
 let remoteUsers = {}
 
@@ -45,28 +38,18 @@ let joinRoomInit = async () => {
     channel.on('MemberJoined', handleMemberJoined)
     channel.on('MemberLeft', handleMemberLeft)
     channel.on('ChannelMessage', handleChannelMessage)
-    rtmClient.on('MessageFromPeer',handleEmtionMessage)
     getMembers()
     addBotMessageToDom(`Welcome to the room ${displayName}! 👋`)
     //video audio room 
     client = await AgoraRTC.createClient({mode:'rtc', codec:'vp8'})
     
     await client.join(APP_ID, roomId, RTCtoken, uid)
-
-    
-    client.on('user-left', handleUserLeft)
-    if(uid === '547180838'){
-        client.on('user-published', handleUserPublished)
-    }
-    else
-    {
-        document.getElementById('join-btn').addEventListener('click', joinStream)
-    }
+    document.getElementById('join-btn').addEventListener('click', joinStream)
 }
 
 let joinStream = async () => {
     document.getElementById('join-btn').style.display = 'none'
-    document.getElementsByClassName('stream__actions')[0].style.display = 'flex'
+    
 
     // localTracks = await AgoraRTC.createMicrophoneAndCameraTracks({}, {encoderConfig:{
     //     width:{min:640, ideal:1920, max:1920},
@@ -83,12 +66,10 @@ let joinStream = async () => {
     document.getElementById(`user-container-${uid}`).addEventListener('click', expandVideoFrame)
     localTracks[1].play(`user-${uid}`)
     await client.publish([localTracks[0],localTracks[1]])
-    joinedStream = true;
+    document.getElementsByClassName('stream__actions')[0].style.display = 'flex'
 }
 
 userDetectionInterval = {}
-if (uid === '547180838'){}
-else{
 IntervalId = setInterval(async ()=>{
 
     videoContainerPlayerDiv = document.getElementById(`user-${uid}`)
@@ -113,7 +94,7 @@ IntervalId = setInterval(async ()=>{
                 let displaySize = { width: 300, height: 300 } 
                 const resizedDetections = await faceapi.resizeResults(detections, displaySize)
                 var message = [maxEmotionKey , ((emotions[maxEmotionKey]*100) | 0) , resizedDetections.detection._box]
-                sendEmotionMessage(JSON.stringify(message) , rtmClient)
+                sendEmotionMessage(JSON.stringify(message) , rtmClient , roomId)
                 
             } 
         }
@@ -122,66 +103,12 @@ IntervalId = setInterval(async ()=>{
 
 
 },100)
-}
 
 
 
 
-let handleUserPublished = async (user, mediaType) => {
-    remoteUsers[user.uid] = user
-    if (uid==='547180838'){
-    await client.subscribe(user, mediaType)
 
-    let player = document.getElementById(`user-container-${user.uid}`)
-    if(player === null){
-        player = `<div class="video__container" id="user-container-${user.uid}">
-                <div class="video-player" id="user-${user.uid}"></div>
-            </div>`
 
-        document.getElementById('streams__container').insertAdjacentHTML('beforeend', player)
-        // if(uid === '547180838'){}
-        // else
-        document.getElementById(`user-container-${user.uid}`).addEventListener('click', expandVideoFrame)
-   
-    }
-
-    if(displayFrame.style.display){
-        let videoFrame = document.getElementById(`user-container-${user.uid}`)
-        videoFrame.style.height = '100px'
-        videoFrame.style.width = '100px'
-    }
-
-    if(mediaType === 'video'){
-        user.videoTrack.play(`user-${user.uid}`)
-    }
-
-    if(mediaType === 'audio'){
-        user.audioTrack.play()
-    }
-    }
-}
-
-let handleUserLeft = async (user) => {
-    
-    delete remoteUsers[user.uid]
-    if(uid === '547180838'){
-    let item = document.getElementById(`user-container-${user.uid}`)
-    if(item){
-        item.remove()
-    }
-
-    if(userIdInDisplayFrame === `user-container-${user.uid}`){
-        displayFrame.style.display = null
-        
-        let videoFrames = document.getElementsByClassName('video__container')
-
-        for(let i = 0; videoFrames.length > i; i++){
-            videoFrames[i].style.height = '300px'
-            videoFrames[i].style.width = '300px'
-        }
-    }
-    }
-}
 
 let toggleMic = async (e) => {
     let button = e.currentTarget
@@ -210,24 +137,23 @@ let toggleCamera = async (e) => {
 let toggleScreen = async (e) => {
     let screenButton = e.currentTarget
     let cameraButton = document.getElementById('camera-btn')
-
+    let leaveButton = document.getElementById('leave-btn')
     if(!sharingScreen){
-        sharingScreen = true
+        
 
-        screenButton.classList.add('active')
-        cameraButton.classList.remove('active')
-        cameraButton.style.display = 'none'
+        
         try {
         localScreenTracks = await AgoraRTC.createScreenVideoTrack()
         
         }catch (e)
         {
-            sharingScreen = false
-            screenButton.classList.remove('active')
-            cameraButton.classList.add('active')
-            cameraButton.style.display = 'block'
             return;
         }
+        sharingScreen = true
+        screenButton.classList.add('active')
+        cameraButton.classList.remove('active')
+        cameraButton.style.display = 'none'
+        leaveButton.style.display = 'none'
         document.getElementById(`user-container-${uid}`).remove()
         displayFrame.style.display = 'block'
 
@@ -256,6 +182,7 @@ let toggleScreen = async (e) => {
     }else{
         sharingScreen = false 
         cameraButton.style.display = 'block'
+        leaveButton.style.display = 'block'
         document.getElementById(`user-container-${uid}`).remove()
         await client.unpublish([localScreenTracks])
 
@@ -291,7 +218,6 @@ let leaveStream = async (e) => {
     if(localScreenTracks){
         await client.unpublish([localScreenTracks])
     }
-
     document.getElementById(`user-container-${uid}`).remove()
 
     if(userIdInDisplayFrame === `user-container-${uid}`){
@@ -303,7 +229,6 @@ let leaveStream = async (e) => {
             videoFrames[i].style.width = '300px'
         }
     }
-
     channel.sendMessage({text:JSON.stringify({'type':'user_left', 'uid':uid})})
 }
 

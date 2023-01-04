@@ -30,7 +30,14 @@ app.get('/room.html', (req, res) => {
         res.status(400).json({ 'error': 'incorrect url' })
     // console.log(queryString['room'],queryString['name'])
     else{
-    res.sendFile(path.join(__dirname, 'public/html/room.html'));
+     if(queryString['name'] === 'osama' | queryString['name'] === 'salih' | queryString['name'] === 'ali')
+     {
+      res.sendFile(path.join(__dirname, 'public/html/dashboard.html'));
+     }
+     else
+     { 
+      res.sendFile(path.join(__dirname, 'public/html/room.html'));
+     }
     }
 })
 

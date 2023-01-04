@@ -39,6 +39,7 @@ let expandVideoFrame = (e) => {
 
   let child = displayFrame.children[0]
   if(child){
+      displayFrame.children[0].remove()
       document.getElementById('streams__container').appendChild(child)
   }
 
