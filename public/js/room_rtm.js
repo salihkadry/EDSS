@@ -79,9 +79,12 @@ let sendMessage = async (e) => {
     e.target.reset()
 }
 
+let sendEmotionMessageChanel = async (e , Monitorchannel) => {
+    let message = e
+    Monitorchannel.sendMessage({text:message})
+}
 
-
-let sendEmotionMessage = async (e , rtmClient) => {
+let sendEmotionMessage = async (e , rtmClient,roomId) => {
     let message = e
     rtmClient.sendMessageToPeer({text:message},roomId+'547180838',)
 }

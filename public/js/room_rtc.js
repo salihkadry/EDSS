@@ -8,6 +8,7 @@ AgoraRTC.setLogLevel(3)
 let client;
 let rtmClient;
 let channel;
+let Monitorchannel;
 const queryString = window.location.search
 const urlParams = new URLSearchParams(queryString)
 let roomId = urlParams.get('room')
@@ -28,14 +29,14 @@ let RTCtoken = null
 
 
 let joinRoomInit = async () => {
-    //chat room
-
     rtmClient = await AgoraRTM.createInstance(APP_ID , {'logFilter' :AgoraRTM.LOG_FILTER_ERROR })
     
     await rtmClient.login({uid,RTMtoken})
     await rtmClient.addOrUpdateLocalUserAttributes({'name':displayName})
     channel = await rtmClient.createChannel(roomId)
+    Monitorchannel = await rtmClient.createChannel(roomId+'547180838')
     await channel.join()
+    await Monitorchannel.join()
     channel.on('MemberJoined', handleMemberJoined)
     channel.on('MemberLeft', handleMemberLeft)
     channel.on('ChannelMessage', handleChannelMessage)
@@ -95,8 +96,8 @@ IntervalId = setInterval(async ()=>{
                 let displaySize = { width: 300, height: 300 } 
                 const resizedDetections = await faceapi.resizeResults(detections, displaySize)
                 var message = [maxEmotionKey , ((emotions[maxEmotionKey]*100) | 0) , resizedDetections.detection._box]
-                sendEmotionMessage(JSON.stringify(message) , rtmClient , roomId)
-                
+                //sendEmotionMessage(JSON.stringify(message) , rtmClient , roomId)
+                sendEmotionMessageChanel(JSON.stringify(message) , Monitorchannel)
             } 
         }
     }

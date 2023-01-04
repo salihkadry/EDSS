@@ -1,6 +1,6 @@
 const APP_ID = "0dad2ddcc43146dca3260bfaaca6e7d0"
 let joinedStream =false;
-
+let uid = (Math.floor(Math.random() * 10000)).toString()
 AgoraRTC.setLogLevel(3)
 
 
@@ -14,7 +14,7 @@ let displayName = urlParams.get('name')
 if(!displayName || !roomId){
     window.location = '/'
 }
-let uid = roomId+'547180838'
+// let uid = roomId+'547180838'
 sessionStorage.setItem('uid', uid)
 let localTracks = []
 let remoteUsers = {}
@@ -25,7 +25,7 @@ let sharingScreen = false;
 
 let RTMtoken = null
 let RTCtoken = null
-
+let Monitorchannel;
 
 let joinRoomInit = async () => {
     //chat room
@@ -35,11 +35,14 @@ let joinRoomInit = async () => {
     await rtmClient.login({uid,RTMtoken})
     await rtmClient.addOrUpdateLocalUserAttributes({'name':displayName})
     channel = await rtmClient.createChannel(roomId)
+    Monitorchannel = await rtmClient.createChannel(roomId+'547180838')
+    await Monitorchannel.join()
     await channel.join()
     channel.on('MemberJoined', handleMemberJoined)
     channel.on('MemberLeft', handleMemberLeft)
     channel.on('ChannelMessage', handleChannelMessage)
-    rtmClient.on('MessageFromPeer',handleEmtionMessage)
+    Monitorchannel.on('ChannelMessage', handleEmtionChanelMessage)
+    // rtmClient.on('MessageFromPeer',handleEmtionMessage)
     getMembers()
     addBotMessageToDom(`Welcome to the room ${displayName}! 👋`)
     //video audio room 
