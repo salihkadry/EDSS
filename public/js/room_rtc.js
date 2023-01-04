@@ -16,7 +16,6 @@ let displayName = urlParams.get('name')
 if(!displayName || !roomId){
     window.location = '/'
 }
-
 let localTracks = []
 let remoteUsers = {}
 
